@@ -24,7 +24,7 @@ int main( void )
             printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
         }
     }
-    if ( ev3_search_tacho( LEGO_EV3_M_MOTOR, &sn, 0 )) {
+    if ( ev3_search_tacho( LEGO_EV3_L_MOTOR, &sn, 0 )) {
         int max_speed;
         printf( "LEGO_EV3_M_MOTOR is found, run for 5 sec...\n" );
         get_tacho_max_speed( sn, &max_speed );
