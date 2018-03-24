@@ -1,0 +1,7 @@
+0 - jizda dopredu podle cary
+1 - otaceni doprava
+2 - otaceni doleva
+3 - couvani
+4 - turbo podle cary
+5 - jet dopredu
+6 - stop
