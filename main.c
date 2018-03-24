@@ -162,7 +162,7 @@ if ( ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 )) {
           //if ( !get_sensor_value( 0, sn_color, &val ) || ( val < 0 ) || ( val >= COLOR_COUNT )) {
           //    val = 0;
           //}
-          get_sensor_value( 0, sn_color, &val )
+          get_sensor_value( 0, sn_color, &val );
           printf("barva %d", val);
           fflush( stdout );
           Sleep( 200 );
