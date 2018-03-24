@@ -22,6 +22,7 @@ int updates = 0;
 int dataLines = 0;
 
 const float NORMAL_VELOCITY = 0.35;
+const float TURBO_VELOCITY = 0.7;
 const float TURN_VELOCITY = 0.6;
 const int WHITE_THRESH = 60;
 const int BLACK_THRESH = 20;
@@ -65,7 +66,7 @@ void reverse(void)
   runMotor(motor_right, NORMAL_VELOCITY, false);
 }
 
-void followPath(void)
+void followPath(bool turbo)
 {
   int val;
 
@@ -83,31 +84,8 @@ void followPath(void)
   }
   else
   {
-    runMotor(motor_left, NORMAL_VELOCITY, true);
-    runMotor(motor_right, NORMAL_VELOCITY, true);
-  }
-}
-
-void followPathTurbo(void)
-{
-  int val;
-
-  // 100 white, 0 black
-  set_sensor_mode(sn_color, "COL-REFLECT");
-  get_sensor_value(0, sn_color, &val);
-
-  if (val > WHITE_THRESH)
-  {
-    runMotor(motor_left, TURN_VELOCITY, true);
-  }
-  else if (val < BLACK_THRESH)
-  {
-    runMotor(motor_right, TURN_VELOCITY, true);
-  }
-  else
-  {
-    runMotor(motor_left, TURN_VELOCITY, true);
-    runMotor(motor_right, TURN_VELOCITY, true);
+    runMotor(motor_left, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
+    runMotor(motor_right, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
   }
 }
 
@@ -191,7 +169,7 @@ int main(void)
     {
     case 0:
     {
-      followPath();
+      followPath(false);
       break;
     }
     case 1:
@@ -211,7 +189,7 @@ int main(void)
     }
     case 4:
     {
-      followPathTurbo();
+      followPath(true);
       break;
     }
     case 5:
