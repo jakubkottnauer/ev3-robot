@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "ev3.h"
 #include "ev3_light.h"
@@ -6,7 +7,18 @@
 #include "ev3_port.h"
 #include "ev3_sensor.h"
 
+const char const *color[] = { "?", "BLACK", "BLUE", "GREEN", "YELLOW", "RED", "WHITE", "BROWN" };
+#define COLOR_COUNT  (( int )( sizeof( color ) / sizeof( color[ 0 ])))
 #define Sleep( msec ) usleep(( msec ) * 1000 )
+
+static bool _check_pressed( uint8_t sn )
+{
+    int val;
+    if ( sn == SENSOR__NONE_ ) {
+        return ( ev3_read_keys(( uint8_t *) &val ) && ( val & EV3_KEY_UP ));
+    }
+    return ( get_sensor_value( 0, sn, &val ) && ( val != 0 ));
+}
 
 void tachoMotor(void) {
   int i;
