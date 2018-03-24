@@ -16,6 +16,9 @@ const char const *color[] = { "?", "BLACK", "BLUE", "GREEN", "YELLOW", "RED", "W
 
 static int state = 0;
 uint8_t sn_color;
+uint8_t motor_left;
+uint8_t motor_right;
+uint8_t servo;
 
 int getMaxSpeed(sn) {
   int max_speed;
@@ -152,6 +155,24 @@ int sensors(void) {
   }
 }
 
+void forward(uint8_t sn) {
+  int max_speed = getMaxSpeed(sn);
+  FLAGS_T state;
+
+  set_tacho_stop_action_inx( sn, TACHO_COAST );
+  set_tacho_speed_sp( sn, max_speed * 1 / 2 );
+  set_tacho_time_sp( sn, 500 );
+  set_tacho_ramp_up_sp( sn, 200 );
+  set_tacho_ramp_down_sp( sn, 200 );
+  set_tacho_command_inx( sn, TACHO_RUN_TIMED );
+
+      /* Wait tacho stop */
+    //Sleep( 100 );
+    //do {
+    //    get_tacho_state_flags( sn, &state );
+    //} while ( state );
+}
+
 void followPath(void) {
   int val;
   int whiteThreshold = 60;
@@ -161,14 +182,14 @@ void followPath(void) {
   set_sensor_mode( sn_color, "COL-REFLECT");
   for ( ; ; ) {
       get_sensor_value( 0, sn_color, &val );
-
-
+      printf("%d\n", val);
       if (val > whiteThreshold) {
-        
+        forward(motor_left);
       } else if (val < blackThreshold) {
-
+        forward(motor_right);
       } else {
-
+        forward(motor_left);
+        forward(motor_right);
       }
 
 
@@ -185,18 +206,25 @@ int main(void)
   uint8_t sn;
   FLAGS_T state;
   char s[ 256 ];
-  
+
   if ( ev3_init() < 1 ) return ( 1 );
   ev3_port_init();
   ev3_tacho_init();
   ev3_sensor_init();
 
   ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 );
+  //ev3_search_tacho( LEGO_EV3_L_MOTOR, &motor_left, 0);
+  //ev3_search_tacho( LEGO_EV3_L_MOTOR, &motor_right, 0);
+  //ev3_search_tacho( LEGO_EV3_M_MOTOR, &servo, 1);
+
+  ev3_search_tacho_plugged_in(ev3_tacho[2].port, ev3_tacho[0].extport, &motor_right, 0);
+  ev3_search_tacho_plugged_in(ev3_tacho[4].port, ev3_tacho[4].extport, &motor_left, 0);
 
   for (i = 0; i < DESC_LIMIT; i++ ) {
     if ( ev3_tacho[ i ].type_inx != TACHO_TYPE__NONE_ ) {
       printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
       printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
+      printf( "  i = %d\n", i);
     }
   }
 
