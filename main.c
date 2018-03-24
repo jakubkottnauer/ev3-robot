@@ -157,7 +157,7 @@ void followPath(void) {
 
 if ( ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 )) {
       printf( "COLOR sensor is found, reading COLOR...\n" );
-      set_sensor_mode( sn_color, "COL-AMBIENT");
+      set_sensor_mode( sn_color, "COL-REFLECT");
       for ( ; ; ) {
           //if ( !get_sensor_value( 0, sn_color, &val ) || ( val < 0 ) || ( val >= COLOR_COUNT )) {
           //    val = 0;
