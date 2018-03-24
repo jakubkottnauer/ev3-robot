@@ -44,7 +44,7 @@ void tachoMotor(void) {
   }
   if ( ev3_search_tacho( LEGO_EV3_L_MOTOR, &sn, 0 )) {
     
-    int max_speed = getMaxSpeed(sn)
+    int max_speed = getMaxSpeed(sn);
 
     set_tacho_stop_action_inx( sn, TACHO_COAST );
     set_tacho_speed_sp( sn, max_speed * 2 / 3 );
