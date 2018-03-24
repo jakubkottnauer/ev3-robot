@@ -12,12 +12,16 @@ const char const *color[] = { "?", "BLACK", "BLUE", "GREEN", "YELLOW", "RED", "W
 #define COLOR_COUNT  (( int )( sizeof( color ) / sizeof( color[ 0 ])))
 #define Sleep( msec ) usleep(( msec ) * 1000 )
 
+
+
+static int state = 0;
+uint8_t sn_color;
+
 int getMaxSpeed(sn) {
   int max_speed;
   get_tacho_max_speed( sn, &max_speed );
   return max_speed;
 }
-
 
 static bool _check_pressed( uint8_t sn )
 {
@@ -148,35 +152,54 @@ int sensors(void) {
   }
 }
 
-static int state = 0;
-
 void followPath(void) {
-  uint8_t sn_color;
-    int val;
+  int val;
+  int whiteThreshold = 60;
+  int blackThreshold = 30;
+
+  // 100 white, 0 black
+  set_sensor_mode( sn_color, "COL-REFLECT");
+  for ( ; ; ) {
+      get_sensor_value( 0, sn_color, &val );
 
 
-if ( ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 )) {
-      printf( "COLOR sensor is found, reading COLOR...\n" );
-      set_sensor_mode( sn_color, "COL-REFLECT");
-      for ( ; ; ) {
-          //if ( !get_sensor_value( 0, sn_color, &val ) || ( val < 0 ) || ( val >= COLOR_COUNT )) {
-          //    val = 0;
-          //}
-          get_sensor_value( 0, sn_color, &val );
-          printf("barva %d", val);
-          fflush( stdout );
-          Sleep( 200 );
+      if (val > whiteThreshold) {
+        
+      } else if (val < blackThreshold) {
+
+      } else {
+
       }
+
+
+      fflush( stdout );
+      Sleep( 200 );
   }
 }
 
+// ssh user1@server1 ''
 
 int main(void)
 {
+  int i = 0;
+  uint8_t sn;
+  FLAGS_T state;
+  char s[ 256 ];
+  
   if ( ev3_init() < 1 ) return ( 1 );
   ev3_port_init();
   ev3_tacho_init();
   ev3_sensor_init();
+
+  ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 );
+
+  for (i = 0; i < DESC_LIMIT; i++ ) {
+    if ( ev3_tacho[ i ].type_inx != TACHO_TYPE__NONE_ ) {
+      printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
+      printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
+    }
+  }
+
 
   //led();
   //tachoMotor();
