@@ -1,18 +1,25 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "ev3.h"
 #include "ev3_light.h"
 #include "ev3_tacho.h"
 #include "ev3_port.h"
 #include "ev3_sensor.h"
+#include "time.h"
 
 const char const *color[] = { "?", "BLACK", "BLUE", "GREEN", "YELLOW", "RED", "WHITE", "BROWN" };
 
 #define COLOR_COUNT  (( int )( sizeof( color ) / sizeof( color[ 0 ])))
 #define Sleep( msec ) usleep(( msec ) * 1000 )
 
+struct timespec tstart={0,0}, tend={0,0};
 
+static float times[128] = {};
+static int states[128] = {};
+int updates = 0;
+int dataLines = 0;
 
 static int state = 0;
 uint8_t sn_color;
@@ -26,182 +33,84 @@ int getMaxSpeed(sn) {
   return max_speed;
 }
 
-static bool _check_pressed( uint8_t sn )
-{
-    int val;
-    if ( sn == SENSOR__NONE_ ) {
-        return ( ev3_read_keys(( uint8_t *) &val ) && ( val & EV3_KEY_UP ));
-    }
-    return ( get_sensor_value( 0, sn, &val ) && ( val != 0 ));
-}
-
-void tachoMotor(void) {
-  int i;
-  uint8_t sn;
-  FLAGS_T state;
-  char s[ 256 ];
-
-  printf( "*** ( EV3 ) Hello! ***\n" );
-  printf( "Found tacho motors:\n" );
-  for ( i = 0; i < DESC_LIMIT; i++ ) {
-    if ( ev3_tacho[ i ].type_inx != TACHO_TYPE__NONE_ ) {
-      printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
-      printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
-    }
-  }
-  if ( ev3_search_tacho( LEGO_EV3_L_MOTOR, &sn, 0 )) {
-    
-    int max_speed = getMaxSpeed(sn);
-
-    set_tacho_stop_action_inx( sn, TACHO_COAST );
-    set_tacho_speed_sp( sn, max_speed * 2 / 3 );
-    set_tacho_time_sp( sn, 5000 );
-    set_tacho_ramp_up_sp( sn, 2000 );
-    set_tacho_ramp_down_sp( sn, 2000 );
-    set_tacho_command_inx( sn, TACHO_RUN_TIMED );
-
-    /* Wait tacho stop */
-    Sleep( 100 );
-    do {
-        get_tacho_state_flags( sn, &state );
-    } while ( state );
-    printf( "run to relative position...\n" );
-    set_tacho_speed_sp( sn, max_speed / 2 );
-    set_tacho_ramp_up_sp( sn, 0 );
-    set_tacho_ramp_down_sp( sn, 0 );
-    set_tacho_position_sp( sn, 90 );
-    for ( i = 0; i < 8; i++ ) {
-      set_tacho_command_inx( sn, TACHO_RUN_TO_REL_POS );
-      Sleep( 500 );
-    }
-  } else {
-      printf( "LEGO_EV3_M_MOTOR is NOT found\n" );
-  }
-}
-
-void led(void) {
-  switch ( get_light( LIT_LEFT )) {
-
-  case LIT_GREEN:
-    set_light( LIT_LEFT, LIT_RED );
-    break;
-
-  case LIT_RED:
-    set_light( LIT_LEFT, LIT_AMBER );
-    break;
-
-  default:
-    set_light( LIT_LEFT, LIT_GREEN );
-    break;
-  }
-}
-
-int sensors(void) {
-  char s[ 256 ];
-  int val;
-  uint32_t n, i, ii;
-  uint8_t sn_touch, sn_color, sn_ir;
-
-  printf( "Waiting the EV3 brick online...\n" );
-  if ( ev3_init() < 1 ) return ( 1 );
-  printf( "*** ( EV3 ) Hello! ***\n" );
-  ev3_sensor_init();
-  printf( "Found sensors:\n" );
-  for ( i = 0; i < DESC_LIMIT; i++ ) {
-      if ( ev3_sensor[ i ].type_inx != SENSOR_TYPE__NONE_ ) {
-          printf( "  type = %s\n", ev3_sensor_type( ev3_sensor[ i ].type_inx ));
-          printf( "  port = %s\n", ev3_sensor_port_name( i, s ));
-          if ( get_sensor_mode( i, s, sizeof( s ))) {
-              printf( "  mode = %s\n", s );
-          }
-          if ( get_sensor_num_values( i, &n )) {
-              for ( ii = 0; ii < n; ii++ ) {
-                  if ( get_sensor_value( ii, i, &val )) {
-                      printf( "  value%d = %d\n", ii, val );
-                  }
-              }
-          }
-      }
-  }
-  if ( ev3_search_sensor( LEGO_EV3_IR, &sn_ir, 0 )) {
-      printf( "IR sensor is found\n" );
-  } else {
-      printf( "IR sensor is NOT found\n" );
-  }
-  if ( ev3_search_sensor( LEGO_EV3_TOUCH, &sn_touch, 0 )) {
-      printf( "TOUCH sensor is found, press BUTTON for EXIT...\n" );
-  } else {
-      printf( "TOUCH sensor is NOT found, press UP on the EV3 brick for EXIT...\n" );
-  }
-  if ( ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 )) {
-      printf( "COLOR sensor is found, reading COLOR...\n" );
-      set_sensor_mode( sn_color, "COL-COLOR" );
-      for ( ; ; ) {
-          if ( !get_sensor_value( 0, sn_color, &val ) || ( val < 0 ) || ( val >= COLOR_COUNT )) {
-              val = 0;
-          }
-          printf( "\r(%s)", color[ val ]);
-          fflush( stdout );
-          if ( _check_pressed( sn_touch )) break;
-          Sleep( 200 );
-          printf( "\r        " );
-          fflush( stdout );
-          if ( _check_pressed( sn_touch )) break;
-          Sleep( 200 );
-      }
-  } else {
-      printf( "COLOR sensor is NOT found\n" );
-      while ( !_check_pressed( sn_touch )) Sleep( 100 );
-  }
-}
-
-void forward(uint8_t sn) {
+void runMotor(uint8_t sn, float mult, bool forward) {
   int max_speed = getMaxSpeed(sn);
   FLAGS_T state;
 
   set_tacho_stop_action_inx( sn, TACHO_COAST );
-  set_tacho_speed_sp( sn, max_speed * 1 / 2 );
-  set_tacho_time_sp( sn, 500 );
-  set_tacho_ramp_up_sp( sn, 200 );
-  set_tacho_ramp_down_sp( sn, 200 );
+  set_tacho_speed_sp( sn, max_speed * mult);
+  set_tacho_time_sp( sn, 50 );
+  set_tacho_ramp_up_sp( sn, 20 );
+  set_tacho_ramp_down_sp( sn, 20 );
   set_tacho_command_inx( sn, TACHO_RUN_TIMED );
-
-      /* Wait tacho stop */
-    //Sleep( 100 );
-    //do {
-    //    get_tacho_state_flags( sn, &state );
-    //} while ( state );
+  set_tacho_polarity_inx(sn, forward ? TACHO_NORMAL : TACHO_INVERSED);
 }
 
 void followPath(void) {
   int val;
   int whiteThreshold = 60;
-  int blackThreshold = 30;
+  int blackThreshold = 20;
 
   // 100 white, 0 black
   set_sensor_mode( sn_color, "COL-REFLECT");
-  for ( ; ; ) {
-      get_sensor_value( 0, sn_color, &val );
-      printf("%d\n", val);
-      if (val > whiteThreshold) {
-        forward(motor_left);
-      } else if (val < blackThreshold) {
-        forward(motor_right);
-      } else {
-        forward(motor_left);
-        forward(motor_right);
-      }
+  get_sensor_value( 0, sn_color, &val );
 
-
-      fflush( stdout );
-      Sleep( 200 );
+  if (val > whiteThreshold) {
+    runMotor(motor_left, 0.6, true);
+  } else if (val < blackThreshold) {
+    runMotor(motor_right, 0.6, true);
+  } else {
+    runMotor(motor_left, 0.35, true);
+    runMotor(motor_right, 0.35, true);
   }
+  
+  Sleep(20);
 }
 
-// ssh user1@server1 ''
+void turnRight(void) {
+  runMotor(motor_left, 0.35, true);
+  runMotor(motor_right, 0.35, false);
+  Sleep(20);
+}
+
+void turnLeft(void) {
+  runMotor(motor_left, 0.35, false);
+  runMotor(motor_right, 0.35, true);
+  Sleep(20);
+}
+
+void parseData() {
+  FILE* stream = fopen("data.txt", "r");
+
+    char line[1024];
+    while (fgets(line, 1024, stream))
+    {
+        char* tmp = strdup(line);
+        char * pch;
+        pch = strtok (tmp,";");
+        int c = 0;
+        while (pch != NULL)
+        {
+          if (c == 0) {
+             times[dataLines] = (float)atof(pch);
+             printf("Ffields %f\n", times[dataLines]);
+          } else if (c == 1) {
+            states[dataLines] = (int)atoi(pch);
+            printf("Ffields %i\n", states[dataLines]);
+          }
+          c++;
+          pch = strtok (NULL, ";");
+        }
+        dataLines++;
+        free(tmp);
+    }
+}
 
 int main(void)
 {
+  parseData();
+  clock_gettime(CLOCK_MONOTONIC, &tstart);
+
   int i = 0;
   uint8_t sn;
   FLAGS_T state;
@@ -213,20 +122,23 @@ int main(void)
   ev3_sensor_init();
 
   ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 );
-  //ev3_search_tacho( LEGO_EV3_L_MOTOR, &motor_left, 0);
-  //ev3_search_tacho( LEGO_EV3_L_MOTOR, &motor_right, 0);
-  //ev3_search_tacho( LEGO_EV3_M_MOTOR, &servo, 1);
 
-  ev3_search_tacho_plugged_in(ev3_tacho[2].port, ev3_tacho[0].extport, &motor_right, 0);
-  ev3_search_tacho_plugged_in(ev3_tacho[4].port, ev3_tacho[4].extport, &motor_left, 0);
-
-  for (i = 0; i < DESC_LIMIT; i++ ) {
-    if ( ev3_tacho[ i ].type_inx != TACHO_TYPE__NONE_ ) {
+  ev3_search_tacho_plugged_in(ev3_tacho[0].port, ev3_tacho[0].extport, &motor_right, 0);
+  ev3_search_tacho_plugged_in(ev3_tacho[1].port, ev3_tacho[1].extport, &motor_left, 0);
+  /*for (i = 0; i < DESC_LIMIT; i++ ) {
+    if (ev3_tacho[i].type_inx != TACHO_TYPE__NONE_) {
       printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
       printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
       printf( "  i = %d\n", i);
+      printf( "  ext port = %d\n", ev3_tacho[i].extport);
+
+      if (ev3_tacho[i].port == 0) {
+        ev3_search_tacho_plugged_in(ev3_tacho[i].port, ev3_tacho[i].extport, &motor_right, 0);
+      } else if (ev3_tacho[i].port == 2) {
+        
+      }
     }
-  }
+  }*/
 
 
   //led();
@@ -238,13 +150,30 @@ int main(void)
     switch(state) {
       case 0: {
         followPath();
+        break;
+      }
+      case 1: {
+        turnRight();
+        break;
+      }
+      case 2: {
+        turnLeft();
+        break;
       }
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &tend);
+    double seconds = ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
+           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
+    printf("State %d\n", state);
+    printf("time %f\n", seconds);
+    if (updates >= dataLines) { continue; }
+
+    if (seconds >= times[updates]) {
+      state = states[updates];
+      updates++;
+    }
   }
-  
-
-
-  
   
   ev3_uninit();
 
