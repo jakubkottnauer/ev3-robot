@@ -2,50 +2,57 @@
 
 #include "ev3.h"
 #include "ev3_light.h"
-#include "ev3_dc.h"
+#include "ev3_tacho.h"
 #include "ev3_port.h"
 
 #define Sleep( msec ) usleep(( msec ) * 1000 )
 
 int main( void )
 {
-  char s[ 256 ], name_port[ 16 ];
-  int i;
-  uint8_t sn, sn_port;
-  uint8_t port = OUTPUT_B;
+    int i;
+    uint8_t sn;
+    FLAGS_T state;
+    char s[ 256 ];
+  if ( ev3_init() == -1 ) return ( 1 );
 
-  sn_port = ev3_search_port( port, EXT_PORT__NONE_ );
-  set_port_mode_inx( sn_port, OUTPUT_DC_MOTOR );
-  if ( get_port_mode( sn_port, s, sizeof( s ))) {
-      printf( "%s: %s\n", name_port, s );
-  }
-  Sleep( 200 );
-  ev3_dc_init();
-
-
-if ( ev3_search_dc_plugged_in( port, EXT_PORT__NONE_, &sn, 0 )) {
-        printf( "DC motor is found, run for 5 sec...\n" );
-        set_dc_ramp_up_sp( sn, 2000 );
-        set_dc_duty_cycle_sp( sn, 100 );
-        set_dc_stop_action_inx( sn, DC_COAST );
-        set_dc_command_inx( sn, DC_RUN_FOREVER );
-        if ( get_dc_state( sn, s, sizeof( s ))) {
-            printf( "state: %s\n", s );
+    while ( ev3_tacho_init() < 1 ) Sleep( 1000 );
+    printf( "*** ( EV3 ) Hello! ***\n" );
+    printf( "Found tacho motors:\n" );
+    for ( i = 0; i < DESC_LIMIT; i++ ) {
+        if ( ev3_tacho[ i ].type_inx != TACHO_TYPE__NONE_ ) {
+            printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
+            printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
         }
-        Sleep( 5000 );
-        set_dc_command_inx( sn, DC_STOP );
-        if ( get_dc_state( sn, s, sizeof( s ))) {
-            printf( "state: %s\n", s );
+    }
+    if ( ev3_search_tacho( LEGO_EV3_M_MOTOR, &sn, 0 )) {
+        int max_speed;
+        printf( "LEGO_EV3_M_MOTOR is found, run for 5 sec...\n" );
+        get_tacho_max_speed( sn, &max_speed );
+        printf("  max_speed = %d\n", max_speed );
+        set_tacho_stop_action_inx( sn, TACHO_COAST );
+        set_tacho_speed_sp( sn, max_speed * 2 / 3 );
+        set_tacho_time_sp( sn, 5000 );
+        set_tacho_ramp_up_sp( sn, 2000 );
+        set_tacho_ramp_down_sp( sn, 2000 );
+        set_tacho_command_inx( sn, TACHO_RUN_TIMED );
+        /* Wait tacho stop */
+        Sleep( 100 );
+        do {
+            get_tacho_state_flags( sn, &state );
+        } while ( state );
+        printf( "run to relative position...\n" );
+        set_tacho_speed_sp( sn, max_speed / 2 );
+        set_tacho_ramp_up_sp( sn, 0 );
+        set_tacho_ramp_down_sp( sn, 0 );
+        set_tacho_position_sp( sn, 90 );
+        for ( i = 0; i < 8; i++ ) {
+            set_tacho_command_inx( sn, TACHO_RUN_TO_REL_POS );
+            Sleep( 500 );
         }
     } else {
-        printf( "DC motor is NOT found\n" );
+        printf( "LEGO_EV3_M_MOTOR is NOT found\n" );
     }
-
- Sleep( 200 );
-    printf( "Reset mode of the EV3 output port...\n" );
-    set_port_mode_inx( sn_port, OUTPUT_AUTO );
-
-ev3_uninit();
+    ev3_uninit();
 
   printf( "Hello, LEGO World!\n" );
 
