@@ -69,12 +69,12 @@ void led(void) {
   }
 }
 
-void sensors(void) {
+int sensors(void) {
   char s[ 256 ];
   int val;
   uint32_t n, i, ii;
   uint8_t sn_touch, sn_color, sn_ir;
-  
+
   printf( "Waiting the EV3 brick online...\n" );
   if ( ev3_init() < 1 ) return ( 1 );
   printf( "*** ( EV3 ) Hello! ***\n" );
