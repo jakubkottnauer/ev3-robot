@@ -3,6 +3,7 @@
 #include "ev3.h"
 #include "ev3_light.h"
 #include "ev3_dc.h"
+#include "ev3_port.h"
 
 #define Sleep( msec ) usleep(( msec ) * 1000 )
 
