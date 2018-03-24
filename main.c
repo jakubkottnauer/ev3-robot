@@ -8,8 +8,16 @@
 #include "ev3_sensor.h"
 
 const char const *color[] = { "?", "BLACK", "BLUE", "GREEN", "YELLOW", "RED", "WHITE", "BROWN" };
+
 #define COLOR_COUNT  (( int )( sizeof( color ) / sizeof( color[ 0 ])))
 #define Sleep( msec ) usleep(( msec ) * 1000 )
+
+int getMaxSpeed(sn) {
+  int max_speed;
+  get_tacho_max_speed( sn, &max_speed );
+  return max_speed;
+}
+
 
 static bool _check_pressed( uint8_t sn )
 {
@@ -29,36 +37,36 @@ void tachoMotor(void) {
   printf( "*** ( EV3 ) Hello! ***\n" );
   printf( "Found tacho motors:\n" );
   for ( i = 0; i < DESC_LIMIT; i++ ) {
-      if ( ev3_tacho[ i ].type_inx != TACHO_TYPE__NONE_ ) {
-          printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
-          printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
-      }
+    if ( ev3_tacho[ i ].type_inx != TACHO_TYPE__NONE_ ) {
+      printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
+      printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
+    }
   }
   if ( ev3_search_tacho( LEGO_EV3_L_MOTOR, &sn, 0 )) {
-      int max_speed;
-      printf( "LEGO_EV3_M_MOTOR is found, run for 5 sec...\n" );
-      get_tacho_max_speed( sn, &max_speed );
-      printf("  max_speed = %d\n", max_speed );
-      set_tacho_stop_action_inx( sn, TACHO_COAST );
-      set_tacho_speed_sp( sn, max_speed * 2 / 3 );
-      set_tacho_time_sp( sn, 5000 );
-      set_tacho_ramp_up_sp( sn, 2000 );
-      set_tacho_ramp_down_sp( sn, 2000 );
-      set_tacho_command_inx( sn, TACHO_RUN_TIMED );
-      /* Wait tacho stop */
-      Sleep( 100 );
-      do {
-          get_tacho_state_flags( sn, &state );
-      } while ( state );
-      printf( "run to relative position...\n" );
-      set_tacho_speed_sp( sn, max_speed / 2 );
-      set_tacho_ramp_up_sp( sn, 0 );
-      set_tacho_ramp_down_sp( sn, 0 );
-      set_tacho_position_sp( sn, 90 );
-      for ( i = 0; i < 8; i++ ) {
-          set_tacho_command_inx( sn, TACHO_RUN_TO_REL_POS );
-          Sleep( 500 );
-      }
+    
+    int max_speed = getMaxSpeed(sn)
+
+    set_tacho_stop_action_inx( sn, TACHO_COAST );
+    set_tacho_speed_sp( sn, max_speed * 2 / 3 );
+    set_tacho_time_sp( sn, 5000 );
+    set_tacho_ramp_up_sp( sn, 2000 );
+    set_tacho_ramp_down_sp( sn, 2000 );
+    set_tacho_command_inx( sn, TACHO_RUN_TIMED );
+
+    /* Wait tacho stop */
+    Sleep( 100 );
+    do {
+        get_tacho_state_flags( sn, &state );
+    } while ( state );
+    printf( "run to relative position...\n" );
+    set_tacho_speed_sp( sn, max_speed / 2 );
+    set_tacho_ramp_up_sp( sn, 0 );
+    set_tacho_ramp_down_sp( sn, 0 );
+    set_tacho_position_sp( sn, 90 );
+    for ( i = 0; i < 8; i++ ) {
+      set_tacho_command_inx( sn, TACHO_RUN_TO_REL_POS );
+      Sleep( 500 );
+    }
   } else {
       printf( "LEGO_EV3_M_MOTOR is NOT found\n" );
   }
@@ -140,6 +148,27 @@ int sensors(void) {
   }
 }
 
+static int state = 0;
+
+void followPath(void) {
+  uint8_t sn_color;
+    int val;
+
+if ( ev3_search_sensor( LEGO_EV3_COLOR, &sn_color, 0 )) {
+      printf( "COLOR sensor is found, reading COLOR...\n" );
+      set_sensor_mode( sn_color, "COL_AMBIENT");
+      for ( ; ; ) {
+          if ( !get_sensor_value( 0, sn_color, &val ) || ( val < 0 ) || ( val >= COLOR_COUNT )) {
+              val = 0;
+          }
+          printf("barva %u", val);
+          fflush( stdout );
+          Sleep( 200 );
+      }
+  }
+}
+
+
 int main(void)
 {
   if ( ev3_init() < 1 ) return ( 1 );
@@ -147,9 +176,22 @@ int main(void)
   ev3_tacho_init();
   ev3_sensor_init();
 
-  led();
-  tachoMotor();
-  sensors();
+  //led();
+  //tachoMotor();
+  //sensors();
+
+
+  while(true) {
+    switch(state) {
+      case 0: {
+        followPath();
+      }
+    }
+  }
+  
+
+
+  
   
   ev3_uninit();
 
