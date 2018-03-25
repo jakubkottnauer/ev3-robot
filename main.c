@@ -7,7 +7,6 @@
 #include "ev3_tacho.h"
 #include "ev3_port.h"
 #include "ev3_sensor.h"
-#include "ev3_servo.h"
 #include "time.h"
 
 const char const *color[] = {"?", "BLACK", "BLUE", "GREEN", "YELLOW", "RED", "WHITE", "BROWN"};
@@ -29,31 +28,13 @@ const int WHITE_THRESH = 65;
 const int BLACK_THRESH = 25;
 
 static int state = 0;
-uint8_t sn_color;
-uint8_t motor_left;
-uint8_t motor_right;
-uint8_t servo;
-uint8_t sn_ir;
+uint8_t sn_color, sn_touch, motor_left, motor_right, servo, sn_ir;
 
 int getMaxSpeed(sn)
 {
   int max_speed;
   get_tacho_max_speed(sn, &max_speed);
   return max_speed;
-}
-
-void moveIfObstacle()
-{
-  int val, i;
-  get_sensor_value(0, sn_ir, &val);
-  Sleep(20);
-  if (val < 10)
-  {
-    for (i = 0; i < 5; i++)
-    {
-      reverse();
-    }
-  }
 }
 
 double getElapsedTime()
@@ -89,6 +70,20 @@ void reverse(void)
 {
   runMotor(motor_left, NORMAL_VELOCITY, false);
   runMotor(motor_right, NORMAL_VELOCITY, false);
+}
+
+void moveIfObstacle()
+{
+  int val, i;
+  get_sensor_value(0, sn_ir, &val);
+  Sleep(20);
+  if (val < 10)
+  {
+    for (i = 0; i < 5; i++)
+    {
+      reverse();
+    }
+  }
 }
 
 void followPath(bool turbo)
@@ -218,8 +213,6 @@ void turnRightUntilBlack(void)
     Sleep(20);
     get_sensor_value(0, sn_color, &val);
   }
-
-  //printf("exit %i\n", val);
 }
 
 void parseData()
@@ -263,18 +256,15 @@ void measureLight(void)
   }
 }
 
-void runServo(bool down)
+void carTrap(bool down)
 {
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  runMotor(servo, 1, down);
-  Sleep(50);
+  int i;
+  for (i = 0; i < 10; i++)
+  {
+    runMotor(servo, 1, down);
+  }
+
+  Sleep(20);
 }
 
 void carSeeker()
@@ -283,11 +273,13 @@ void carSeeker()
   int val;
   int min = 100;
 
+  // rotate left
   for (i = 0; i < 15; i++)
   {
     turnLeft();
   }
 
+  // search from far left to far right
   for (i = 0; i < 30; i++)
   {
     turnRight();
@@ -299,8 +291,9 @@ void carSeeker()
     }
   }
 
-  min += 4;
+  min += 2;
 
+  // find the closest object
   for (i = 0; i < 60; i++)
   {
     turnLeft();
@@ -312,17 +305,18 @@ void carSeeker()
     }
   }
 
-  runServo(false);
+  carTrap(false);
+
   turnRight();
   turnRight();
-  Sleep(20);
+
   for (i = 0; i < 50; i++)
   {
     goForward();
     Sleep(20);
   }
-  runServo(true);
-  Sleep(20);
+
+  carTrap(true);
 
   for (i = 0; i < 50; i++)
   {
@@ -331,31 +325,10 @@ void carSeeker()
   }
 }
 
-int main(void)
+void listMotors()
 {
-  parseData();
-  clock_gettime(CLOCK_MONOTONIC, &tstart);
-  int i = 0;
-  uint8_t sn;
-  FLAGS_T state;
   char s[256];
-
-  if (ev3_init() < 1)
-    return (1);
-  ev3_port_init();
-  ev3_tacho_init();
-  ev3_sensor_init();
-
-  ev3_search_sensor(LEGO_EV3_COLOR, &sn_color, 0);
-  ev3_search_sensor(LEGO_EV3_IR, &sn_ir, 0);
-
-  int LEFT_MOTOR = 2;
-  int RIGHT_MOTOR = 0;
-  int SERVO = 3;
-
-  ev3_search_tacho_plugged_in(ev3_tacho[RIGHT_MOTOR].port, ev3_tacho[RIGHT_MOTOR].extport, &motor_right, 0);
-  ev3_search_tacho_plugged_in(ev3_tacho[LEFT_MOTOR].port, ev3_tacho[LEFT_MOTOR].extport, &motor_left, 0);
-  ev3_search_tacho_plugged_in(ev3_tacho[SERVO].port, ev3_tacho[SERVO].extport, &servo, 0);
+  int i;
   for (i = 0; i < DESC_LIMIT; i++)
   {
     if (ev3_tacho[i].type_inx != TACHO_TYPE__NONE_)
@@ -366,6 +339,34 @@ int main(void)
       printf("  ext port = %d\n", ev3_tacho[i].extport);
     }
   }
+}
+
+int main(void)
+{
+  parseData();
+  clock_gettime(CLOCK_MONOTONIC, &tstart);
+  int i = 0;
+  uint8_t sn;
+  FLAGS_T state;
+
+  ev3_init();
+  ev3_port_init();
+  ev3_tacho_init();
+  ev3_sensor_init();
+
+  ev3_search_sensor(LEGO_EV3_COLOR, &sn_color, 0);
+  ev3_search_sensor(LEGO_EV3_IR, &sn_ir, 0);
+  ev3_search_sensor(LEGO_EV3_TOUCH, &sn_touch, 0);
+
+  int LEFT_MOTOR = 2;
+  int RIGHT_MOTOR = 0;
+  int SERVO = 3;
+
+  ev3_search_tacho_plugged_in(ev3_tacho[RIGHT_MOTOR].port, ev3_tacho[RIGHT_MOTOR].extport, &motor_right, 0);
+  ev3_search_tacho_plugged_in(ev3_tacho[LEFT_MOTOR].port, ev3_tacho[LEFT_MOTOR].extport, &motor_left, 0);
+  ev3_search_tacho_plugged_in(ev3_tacho[SERVO].port, ev3_tacho[SERVO].extport, &servo, 0);
+
+  listMotors();
 
   while (true)
   {
