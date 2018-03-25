@@ -7,6 +7,7 @@
 #include "ev3_tacho.h"
 #include "ev3_port.h"
 #include "ev3_sensor.h"
+#include "ev3_servo.h"
 #include "time.h"
 
 const char const *color[] = {"?", "BLACK", "BLUE", "GREEN", "YELLOW", "RED", "WHITE", "BROWN"};
@@ -21,9 +22,9 @@ static int states[128] = {};
 int updates = 0;
 int dataLines = 0;
 
-const float NORMAL_VELOCITY = 0.22;
+const float NORMAL_VELOCITY = 0.4;
 const float TURBO_VELOCITY = 0.63;
-const float TURN_VELOCITY = 0.25;
+const float TURN_VELOCITY = 0.2;
 const int WHITE_THRESH = 65;
 const int BLACK_THRESH = 25;
 
@@ -32,12 +33,27 @@ uint8_t sn_color;
 uint8_t motor_left;
 uint8_t motor_right;
 uint8_t servo;
+uint8_t sn_ir;
 
 int getMaxSpeed(sn)
 {
   int max_speed;
   get_tacho_max_speed(sn, &max_speed);
   return max_speed;
+}
+
+void moveIfObstacle()
+{
+  int val, i;
+  get_sensor_value(0, sn_ir, &val);
+  Sleep(20);
+  if (val < 10)
+  {
+    for (i = 0; i < 5; i++)
+    {
+      reverse();
+    }
+  }
 }
 
 double getElapsedTime()
@@ -80,25 +96,21 @@ void followPath(bool turbo)
   int val;
 
   // 100 white, 0 black
-  set_sensor_mode(sn_color, "COL-COLOR");
+  set_sensor_mode(sn_color, "COL-REFLECT");
   get_sensor_value(0, sn_color, &val);
-  printf("%s\n", color[val]);
-  if (strcmp(color[val], "BLUE") == 0 || strcmp(color[val], "GREEN") == 0)
+
+  if (val > WHITE_THRESH)
   {
     runMotor(motor_left, TURN_VELOCITY, true);
   }
-  else if (strcmp(color[val], "BLACK") == 0 || strcmp(color[val], "BROWN") == 0)
+  else if (val < BLACK_THRESH)
   {
     runMotor(motor_right, TURN_VELOCITY, true);
-  }
-  else if (strcmp(color[val], "WHITE") == 0)
-  {
-    runMotor(motor_left, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
-    runMotor(motor_right, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
   }
   else
   {
-    runMotor(motor_right, TURN_VELOCITY, true);
+    runMotor(motor_left, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
+    runMotor(motor_right, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
   }
 }
 
@@ -114,92 +126,83 @@ void turnLeft(void)
   runMotor(motor_right, TURN_VELOCITY, true);
 }
 
-void followPathUntilWhite(bool left)
+void followPathUntilWhite(bool turbo)
 {
-  int val;
+  int val, i;
   int whiteCount = 0;
-  int i = 0;
   // 100 white, 0 black
-  set_sensor_mode(sn_color, "COL-COLOR");
   while (true)
   {
+    set_sensor_mode(sn_color, "COL-REFLECT");
     get_sensor_value(0, sn_color, &val);
-    printf("%s\n", color[val]);
 
-    if (strcmp(color[val], "BLUE") == 0 || strcmp(color[val], "GREEN") == 0)
+    if (val > WHITE_THRESH)
     {
-      left ? runMotor(motor_left, TURN_VELOCITY, true) : runMotor(motor_right, TURN_VELOCITY, true);
-      whiteCount = 0;
+      runMotor(motor_left, TURN_VELOCITY, true);
     }
-    else if (strcmp(color[val], "BLACK") == 0 || strcmp(color[val], "BROWN") == 0)
+    else if (val < BLACK_THRESH)
     {
-      left ? runMotor(motor_right, TURN_VELOCITY, true) : runMotor(motor_left, TURN_VELOCITY, true);
-      ;
+      runMotor(motor_right, TURN_VELOCITY, true);
       whiteCount = 0;
     }
     else
     {
-      runMotor(motor_left, NORMAL_VELOCITY, true);
-      runMotor(motor_right, NORMAL_VELOCITY, true);
+      runMotor(motor_left, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
+      runMotor(motor_right, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
       whiteCount++;
     }
 
-    if (whiteCount > 40)
+    moveIfObstacle();
+
+    if (whiteCount > 20)
     {
-      //set_sensor_mode(sn_color, "COL-REFLECT");
-      //get_sensor_value(0, sn_color, &val);
-      //printf("whitepower %i\n", val);
-      //set_sensor_mode(sn_color, "COL-COLOR");
-      Sleep(10);
-      bool wasLeftWhite = true;
+      set_sensor_mode(sn_color, "COL-COLOR");
+
+      whiteCount = 0;
+      Sleep(20);
+      bool whiteDetected = true;
       for (i = 0; i < 15; i++)
       {
         turnLeft();
         get_sensor_value(0, sn_color, &val);
-        wasLeftWhite = wasLeftWhite && strcmp(color[val], "WHITE") == 0;
-        Sleep(10);
+        whiteDetected = whiteDetected && strcmp(color[val], "WHITE") == 0;
+        Sleep(50);
       }
 
-      if (wasLeftWhite)
+      if (whiteDetected)
       {
 
-        bool wasRightWhite = true;
-        for (i = 0; i < 25; i++)
+        for (i = 0; i < 30; i++)
         {
           turnRight();
           get_sensor_value(0, sn_color, &val);
-          wasRightWhite = wasRightWhite && strcmp(color[val], "WHITE") == 0;
-          Sleep(10);
+          whiteDetected = whiteDetected && strcmp(color[val], "WHITE") == 0;
+          Sleep(50);
         }
 
-        for (i = 0; i < 15; i++)
+        for (i = 0; i < 20; i++)
         {
           turnLeft();
         }
 
-        Sleep(10);
+        Sleep(20);
 
-        if (wasRightWhite)
+        if (whiteDetected)
         {
           return;
-        }
-        else
-        {
-          whiteCount = 0;
         }
       }
       else
       {
-        for (i = 0; i < 10; i++)
+        for (i = 0; i < 13; i++)
         {
           turnRight();
-          Sleep(10);
+          Sleep(50);
         }
-        whiteCount = 0;
       }
     }
 
-    Sleep(90);
+    Sleep(20);
   }
 }
 
@@ -260,6 +263,74 @@ void measureLight(void)
   }
 }
 
+void runServo(bool down)
+{
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  runMotor(servo, 1, down);
+  Sleep(50);
+}
+
+void carSeeker()
+{
+  int i;
+  int val;
+  int min = 100;
+
+  for (i = 0; i < 15; i++)
+  {
+    turnLeft();
+  }
+
+  for (i = 0; i < 30; i++)
+  {
+    turnRight();
+    Sleep(20);
+    get_sensor_value(0, sn_ir, &val);
+    if (val < min)
+    {
+      min = val;
+    }
+  }
+
+  min += 4;
+
+  for (i = 0; i < 60; i++)
+  {
+    turnLeft();
+    Sleep(20);
+    get_sensor_value(0, sn_ir, &val);
+    if (val < min)
+    {
+      break;
+    }
+  }
+
+  runServo(false);
+  turnRight();
+  turnRight();
+  Sleep(20);
+  for (i = 0; i < 50; i++)
+  {
+    goForward();
+    Sleep(20);
+  }
+  runServo(true);
+  Sleep(20);
+
+  for (i = 0; i < 50; i++)
+  {
+    reverse();
+    Sleep(20);
+  }
+}
+
 int main(void)
 {
   parseData();
@@ -276,12 +347,15 @@ int main(void)
   ev3_sensor_init();
 
   ev3_search_sensor(LEGO_EV3_COLOR, &sn_color, 0);
+  ev3_search_sensor(LEGO_EV3_IR, &sn_ir, 0);
 
   int LEFT_MOTOR = 2;
   int RIGHT_MOTOR = 0;
+  int SERVO = 3;
 
   ev3_search_tacho_plugged_in(ev3_tacho[RIGHT_MOTOR].port, ev3_tacho[RIGHT_MOTOR].extport, &motor_right, 0);
   ev3_search_tacho_plugged_in(ev3_tacho[LEFT_MOTOR].port, ev3_tacho[LEFT_MOTOR].extport, &motor_left, 0);
+  ev3_search_tacho_plugged_in(ev3_tacho[SERVO].port, ev3_tacho[SERVO].extport, &servo, 0);
   for (i = 0; i < DESC_LIMIT; i++)
   {
     if (ev3_tacho[i].type_inx != TACHO_TYPE__NONE_)
@@ -338,12 +412,12 @@ int main(void)
     }
     case 8:
     {
-      followPathUntilWhite(true);
+      followPathUntilWhite(false);
       break;
     }
     case 9:
     {
-      followPathUntilWhite(false);
+      carSeeker();
       break;
     }
     case 88:
