@@ -21,11 +21,11 @@ static int states[128] = {};
 int updates = 0;
 int dataLines = 0;
 
-const float NORMAL_VELOCITY = 0.35;
-const float TURBO_VELOCITY = 0.7;
-const float TURN_VELOCITY = 0.6;
-const int WHITE_THRESH = 60;
-const int BLACK_THRESH = 20;
+const float NORMAL_VELOCITY = 0.22;
+const float TURBO_VELOCITY = 0.63;
+const float TURN_VELOCITY = 0.25;
+const int WHITE_THRESH = 65;
+const int BLACK_THRESH = 25;
 
 static int state = 0;
 uint8_t sn_color;
@@ -38,6 +38,15 @@ int getMaxSpeed(sn)
   int max_speed;
   get_tacho_max_speed(sn, &max_speed);
   return max_speed;
+}
+
+double getElapsedTime()
+{
+  clock_gettime(CLOCK_MONOTONIC, &tend);
+  double seconds = ((double)tend.tv_sec + 1.0e-9 * tend.tv_nsec) -
+                   ((double)tstart.tv_sec + 1.0e-9 * tstart.tv_nsec);
+  printf("time %f\n", seconds);
+  return seconds;
 }
 
 void runMotor(uint8_t sn, float mult, bool forward)
@@ -71,34 +80,143 @@ void followPath(bool turbo)
   int val;
 
   // 100 white, 0 black
-  set_sensor_mode(sn_color, "COL-REFLECT");
+  set_sensor_mode(sn_color, "COL-COLOR");
   get_sensor_value(0, sn_color, &val);
-
-  if (val > WHITE_THRESH)
+  printf("%s\n", color[val]);
+  if (strcmp(color[val], "BLUE") == 0 || strcmp(color[val], "GREEN") == 0)
   {
     runMotor(motor_left, TURN_VELOCITY, true);
   }
-  else if (val < BLACK_THRESH)
+  else if (strcmp(color[val], "BLACK") == 0 || strcmp(color[val], "BROWN") == 0)
   {
     runMotor(motor_right, TURN_VELOCITY, true);
   }
-  else
+  else if (strcmp(color[val], "WHITE") == 0)
   {
     runMotor(motor_left, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
     runMotor(motor_right, turbo ? TURBO_VELOCITY : NORMAL_VELOCITY, true);
+  }
+  else
+  {
+    runMotor(motor_right, TURN_VELOCITY, true);
   }
 }
 
 void turnRight(void)
 {
-  runMotor(motor_left, NORMAL_VELOCITY, true);
-  runMotor(motor_right, NORMAL_VELOCITY, false);
+  runMotor(motor_left, TURN_VELOCITY, true);
+  runMotor(motor_right, TURN_VELOCITY, false);
 }
 
 void turnLeft(void)
 {
-  runMotor(motor_left, NORMAL_VELOCITY, false);
-  runMotor(motor_right, NORMAL_VELOCITY, true);
+  runMotor(motor_left, TURN_VELOCITY, false);
+  runMotor(motor_right, TURN_VELOCITY, true);
+}
+
+void followPathUntilWhite(bool left)
+{
+  int val;
+  int whiteCount = 0;
+  int i = 0;
+  // 100 white, 0 black
+  set_sensor_mode(sn_color, "COL-COLOR");
+  while (true)
+  {
+    get_sensor_value(0, sn_color, &val);
+    printf("%s\n", color[val]);
+
+    if (strcmp(color[val], "BLUE") == 0 || strcmp(color[val], "GREEN") == 0)
+    {
+      left ? runMotor(motor_left, TURN_VELOCITY, true) : runMotor(motor_right, TURN_VELOCITY, true);
+      whiteCount = 0;
+    }
+    else if (strcmp(color[val], "BLACK") == 0 || strcmp(color[val], "BROWN") == 0)
+    {
+      left ? runMotor(motor_right, TURN_VELOCITY, true) : runMotor(motor_left, TURN_VELOCITY, true);
+      ;
+      whiteCount = 0;
+    }
+    else
+    {
+      runMotor(motor_left, NORMAL_VELOCITY, true);
+      runMotor(motor_right, NORMAL_VELOCITY, true);
+      whiteCount++;
+    }
+
+    if (whiteCount > 40)
+    {
+      //set_sensor_mode(sn_color, "COL-REFLECT");
+      //get_sensor_value(0, sn_color, &val);
+      //printf("whitepower %i\n", val);
+      //set_sensor_mode(sn_color, "COL-COLOR");
+      Sleep(10);
+      bool wasLeftWhite = true;
+      for (i = 0; i < 15; i++)
+      {
+        turnLeft();
+        get_sensor_value(0, sn_color, &val);
+        wasLeftWhite = wasLeftWhite && strcmp(color[val], "WHITE") == 0;
+        Sleep(10);
+      }
+
+      if (wasLeftWhite)
+      {
+
+        bool wasRightWhite = true;
+        for (i = 0; i < 25; i++)
+        {
+          turnRight();
+          get_sensor_value(0, sn_color, &val);
+          wasRightWhite = wasRightWhite && strcmp(color[val], "WHITE") == 0;
+          Sleep(10);
+        }
+
+        for (i = 0; i < 15; i++)
+        {
+          turnLeft();
+        }
+
+        Sleep(10);
+
+        if (wasRightWhite)
+        {
+          return;
+        }
+        else
+        {
+          whiteCount = 0;
+        }
+      }
+      else
+      {
+        for (i = 0; i < 10; i++)
+        {
+          turnRight();
+          Sleep(10);
+        }
+        whiteCount = 0;
+      }
+    }
+
+    Sleep(90);
+  }
+}
+
+void turnRightUntilBlack(void)
+{
+  int val;
+  set_sensor_mode(sn_color, "COL-COLOR");
+  get_sensor_value(0, sn_color, &val);
+
+  while (strcmp(color[val], "BLACK") != 0)
+  {
+    turnRight();
+    Sleep(20);
+    get_sensor_value(0, sn_color, &val);
+  }
+
+  //printf("exit %i\n", val);
 }
 
 void parseData()
@@ -129,6 +247,19 @@ void parseData()
   }
 }
 
+void measureLight(void)
+{
+  int val;
+  set_sensor_mode(sn_color, "COL-COLOR");
+
+  while (true)
+  {
+    get_sensor_value(0, sn_color, &val);
+    printf("%s\n", color[val]);
+    Sleep(100);
+  }
+}
+
 int main(void)
 {
   parseData();
@@ -146,22 +277,21 @@ int main(void)
 
   ev3_search_sensor(LEGO_EV3_COLOR, &sn_color, 0);
 
-  ev3_search_tacho_plugged_in(ev3_tacho[0].port, ev3_tacho[0].extport, &motor_right, 0);
-  ev3_search_tacho_plugged_in(ev3_tacho[1].port, ev3_tacho[1].extport, &motor_left, 0);
-  /*for (i = 0; i < DESC_LIMIT; i++ ) {
-    if (ev3_tacho[i].type_inx != TACHO_TYPE__NONE_) {
-      printf( "  type = %s\n", ev3_tacho_type( ev3_tacho[ i ].type_inx ));
-      printf( "  port = %s\n", ev3_tacho_port_name( i, s ));
-      printf( "  i = %d\n", i);
-      printf( "  ext port = %d\n", ev3_tacho[i].extport);
+  int LEFT_MOTOR = 2;
+  int RIGHT_MOTOR = 0;
 
-      if (ev3_tacho[i].port == 0) {
-        ev3_search_tacho_plugged_in(ev3_tacho[i].port, ev3_tacho[i].extport, &motor_right, 0);
-      } else if (ev3_tacho[i].port == 2) {
-        
-      }
+  ev3_search_tacho_plugged_in(ev3_tacho[RIGHT_MOTOR].port, ev3_tacho[RIGHT_MOTOR].extport, &motor_right, 0);
+  ev3_search_tacho_plugged_in(ev3_tacho[LEFT_MOTOR].port, ev3_tacho[LEFT_MOTOR].extport, &motor_left, 0);
+  for (i = 0; i < DESC_LIMIT; i++)
+  {
+    if (ev3_tacho[i].type_inx != TACHO_TYPE__NONE_)
+    {
+      printf("  type = %s\n", ev3_tacho_type(ev3_tacho[i].type_inx));
+      printf("  port = %s\n", ev3_tacho_port_name(i, s));
+      printf("  i = %d\n", i);
+      printf("  ext port = %d\n", ev3_tacho[i].extport);
     }
-  }*/
+  }
 
   while (true)
   {
@@ -182,7 +312,7 @@ int main(void)
       turnLeft();
       break;
     }
-    case 2:
+    case 3:
     {
       reverse();
       break;
@@ -201,19 +331,38 @@ int main(void)
     {
       break;
     }
+    case 7:
+    {
+      turnRightUntilBlack();
+      break;
+    }
+    case 8:
+    {
+      followPathUntilWhite(true);
+      break;
+    }
+    case 9:
+    {
+      followPathUntilWhite(false);
+      break;
+    }
+    case 88:
+    {
+      measureLight();
+      break;
+    }
     }
 
     Sleep(20);
-    clock_gettime(CLOCK_MONOTONIC, &tend);
-    double seconds = ((double)tend.tv_sec + 1.0e-9 * tend.tv_nsec) -
-                     ((double)tstart.tv_sec + 1.0e-9 * tstart.tv_nsec);
-    printf("time %f\n", seconds);
+
     if (updates >= dataLines)
     {
       continue;
     }
 
-    if (seconds >= times[updates])
+    double elapsedTime = getElapsedTime();
+
+    if (elapsedTime >= times[updates])
     {
       state = states[updates];
       updates++;

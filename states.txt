@@ -5,3 +5,8 @@
 4 - turbo podle cary
 5 - jet dopredu
 6 - stop
+7 - otaceni doprava dokud nenarazi na cernou
+8 - jet dokud neni bila (levy pruh)
+9 - jet dokud neni bila (pravy pruh)
+
+88 - mereni jasu
